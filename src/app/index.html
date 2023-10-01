@@ -13,10 +13,12 @@
 	<script src="./scripts/main.js" defer></script>
 </head>
 <body>
-	<div class="autocomplete-container">
+	<div class="autocomplete-container">	
 		<input type="text" id="from-address" placeholder="Fra">
 		<input type="text" id="to-address" placeholder="Til">
+		<fluent-divider style="margin-top: 10px"></fluent-divider>
 		<fluent-button appearance="accent" onclick="navigate()">Find rute</fluent-button>
+		<fluent-button appearance="neutral" onclick="clearRoutes()">Fjern rute</fluent-button>
 	</div>
 	<div id="map"></div>
 </body>

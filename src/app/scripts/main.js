@@ -1,33 +1,47 @@
-let fromCoordinates = [];
+let fromCoordinates = []
 let toCoordinates = []
+let fromAddress = ""
+let toAddress = ""
+let layerGroups = {}
 
-let map = L.map('map').setView([56.2702914, 10.1681083], 8);
+let map = L.map('map', {
+    center: [56.2702914, 10.1681083],
+    zoom: 8,
+})
 
-L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-}).addTo(map);
+let baseTileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: 
+    '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+}).addTo(map)
 
-let layerGroup = L.layerGroup()
-layerGroup.addTo(map)
+let markerLayerGroup = L.layerGroup()
+markerLayerGroup.addTo(map)
+
+let layerControl = L.control.layers({"Kort": baseTileLayer})
 
 dawaAutocomplete.dawaAutocomplete(document.getElementById("from-address"), {
     select: function(selected) {
-        console.log(selected)
-        fromCoordinates[0] = selected.data.x;
-        fromCoordinates[1] = selected.data.y;
+        fromCoordinates[0] = selected.data.x
+        fromCoordinates[1] = selected.data.y
+        fromAddress = selected.tekst
     }
 });
 
 dawaAutocomplete.dawaAutocomplete(document.getElementById("to-address"), {
     select: function(selected) {
-        console.log(selected)
-        toCoordinates[0] = selected.data.x;
-        toCoordinates[1] = selected.data.y;
+        toCoordinates[0] = selected.data.x
+        toCoordinates[1] = selected.data.y
+        toAddress = selected.tekst
     }
 });
 
 async function navigate() {
-    console.log(`Navigating from (${fromCoordinates[0]},${fromCoordinates[1]}) to (${toCoordinates[0]},${toCoordinates[1]})`);
+    if (fromCoordinates[0] == undefined || fromCoordinates[1] == undefined||
+        toCoordinates[0] == undefined || toCoordinates[1] == undefined) {
+            console.debug("Not all coordinates are present. Returning.")
+            return
+        }
+
     let response = await fetch("/route", {
         method: "POST",
         headers: {
@@ -36,9 +50,9 @@ async function navigate() {
         },
         body: JSON.stringify(constructBody())
     })
-    let route = await response.json()
-    console.log(route)
-    drawRoute(route)
+
+    let json = await response.json()
+    drawRoutes(json)
 }
 
 function constructBody() {
@@ -59,45 +73,122 @@ function constructBody() {
                 }
             }
         },
-        "polylineEncoding": "GEO_JSON_LINESTRING"
+        "travelMode": "DRIVE",
+        "polylineEncoding": "GEO_JSON_LINESTRING",
+        "polylineQuality": "OVERVIEW",
+        "computeAlternativeRoutes": true
     }
 }
 
-function drawRoute(route) {
-    clearRoute()
-    // Add marker for start location to map
+function drawRoutes(root) {
+    clearRoutes()
 
-    let startLocationMarker = 
-        L.marker(
-            [route.routes[0].legs[0].startLocation.latLng.latitude,
-            route.routes[0].legs[0].startLocation.latLng.longitude])
+    drawStartLocation(root)
+    drawEndLocation(root)
 
-    layerGroup.addLayer(startLocationMarker)
-
-    // Add marker for end location to map
-    let endLocationMarker = 
-        L.marker(
-            [route.routes[0].legs[0].endLocation.latLng.latitude,
-            route.routes[0].legs[0].endLocation.latLng.longitude])
+    let i = 0;
+    let isPrimaryRoute = true
     
-    layerGroup.addLayer(endLocationMarker)
+    while (i < root.routes.length) {
+        let layerGroup = drawRoute(root.routes[i], isPrimaryRoute)
+        layerGroups[`${metersToKilometers(root.routes[i].distanceMeters)} km (${secondsToHoursAndMinutes(root.routes[i].duration)})`] = layerGroup
+        isPrimaryRoute = false
+        i++
+    }
 
-    let latLngs = []
-
-    // For each step in the route leg, draw a polyline
-    route.routes[0].legs[0].steps.forEach(step => {
-        console.log(step.polyline.geoJsonLinestring.coordinates)
-
-        step.polyline.geoJsonLinestring.coordinates.forEach(coordinate => {
-            latLngs.push([coordinate[1], coordinate[0]])
-        }) 
+    layerControl = L.control.layers(layerGroups, {}, {
+        collapsed: false,
+        position: "bottomleft"
     })
 
-    let polyline = L.polyline(latLngs)
-    layerGroup.addLayer(polyline)
-    map.fitBounds(polyline.getBounds());
+    layerControl.addTo(map)
 }
 
-function clearRoute() {
-    layerGroup.clearLayers();
+function drawStartLocation(root) {
+    let startLocationMarker = 
+        L.marker(
+            [root.routes[0].legs[0].startLocation.latLng.latitude,
+            root.routes[0].legs[0].startLocation.latLng.longitude])
+
+    startLocationMarker.bindPopup(fromAddress).openPopup();
+    markerLayerGroup.addLayer(startLocationMarker)
+}
+
+function drawEndLocation(root) {
+    let endLocationMarker = 
+        L.marker(
+            [root.routes[0].legs[0].endLocation.latLng.latitude,
+            root.routes[0].legs[0].endLocation.latLng.longitude])
+
+    endLocationMarker.bindPopup(toAddress).openPopup()
+    markerLayerGroup.addLayer(endLocationMarker)
+}
+
+function drawRoute(route, isPrimaryRoute) {
+    let polyLineLatLngs = []
+    let stepStarts = []
+
+    let routeLayerGroup = L.layerGroup()
+    if (isPrimaryRoute) routeLayerGroup.addTo(map)
+
+    route.legs[0].steps.forEach(step => {
+        step.polyline.geoJsonLinestring.coordinates.forEach(coordinate => {
+            polyLineLatLngs.push([coordinate[1], coordinate[0]])
+        }) 
+
+        stepStarts.push(
+            [
+                step.polyline.geoJsonLinestring.coordinates[0][1],
+                step.polyline.geoJsonLinestring.coordinates[0][0],
+                step.navigationInstruction.instructions
+            ]
+        )
+    })
+
+    let polyline = L.polyline(polyLineLatLngs, {
+        color: "#036AC4"
+    })
+    
+    routeLayerGroup.addLayer(polyline)
+
+    stepStarts.forEach(start => {
+        let circle = L.circle([start[0],start[1]],
+            {
+                radius: 5,
+                color: "#036AC4",
+                fillColor: "#FFFFFF",
+                fillOpacity: 1
+            }
+        )
+
+        circle.bindPopup(start[2])
+        routeLayerGroup.addLayer(circle)
+    })
+
+    if (isPrimaryRoute) map.fitBounds(polyline.getBounds())
+    return routeLayerGroup
+}
+
+function clearRoutes() {
+    layerControl.remove()
+    markerLayerGroup.clearLayers()
+
+    for (let group in layerGroups) {
+        layerGroups[group].clearLayers()
+    }
+
+    layerGroups = {}
+}
+
+function metersToKilometers(meters) {
+    return (meters / 1000).toFixed(2)
+}
+
+function secondsToHoursAndMinutes(duration) {
+    let d = parseInt(duration.split("s")[0])
+    let hours = Math.floor(d / 3600)
+    let minutes = Math.floor(d % 3600 / 60)
+    let seconds = Math.floor(d % 3600 % 60)
+
+    return `${hours}h${minutes}m${seconds}s`
 }
