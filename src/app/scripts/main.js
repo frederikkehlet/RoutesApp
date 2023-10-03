@@ -88,10 +88,11 @@ function drawRoutes(root) {
 
     let i = 0;
     let isPrimaryRoute = true
-    
+    let colors = ["#036AC4", "#BF40BF", "#097969"]
+
     while (i < root.routes.length) {
-        let layerGroup = drawRoute(root.routes[i], isPrimaryRoute)
-        layerGroups[`${metersToKilometers(root.routes[i].distanceMeters)} km (${secondsToHoursAndMinutes(root.routes[i].duration)})`] = layerGroup
+        let layerGroup = drawRoute(root.routes[i], isPrimaryRoute, colors[i])
+        layerGroups[`<span style="color:${colors[i]};font-weight:bold">${metersToKilometers(root.routes[i].distanceMeters)} km (${secondsToHoursAndMinutes(root.routes[i].duration)})</span>`] = layerGroup
         isPrimaryRoute = false
         i++
     }
@@ -124,7 +125,7 @@ function drawEndLocation(root) {
     markerLayerGroup.addLayer(endLocationMarker)
 }
 
-function drawRoute(route, isPrimaryRoute) {
+function drawRoute(route, isPrimaryRoute, color) {
     let polyLineLatLngs = []
     let stepStarts = []
 
@@ -146,7 +147,7 @@ function drawRoute(route, isPrimaryRoute) {
     })
 
     let polyline = L.polyline(polyLineLatLngs, {
-        color: "#036AC4"
+        color: color
     })
     
     routeLayerGroup.addLayer(polyline)
@@ -155,7 +156,7 @@ function drawRoute(route, isPrimaryRoute) {
         let circle = L.circle([start[0],start[1]],
             {
                 radius: 5,
-                color: "#036AC4",
+                color: color,
                 fillColor: "#FFFFFF",
                 fillOpacity: 1
             }
