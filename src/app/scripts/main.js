@@ -9,9 +9,9 @@ let map = L.map('map', {
     zoom: 8,
 })
 
-let baseTileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+let baseTileLayer = L.tileLayer('https://tiles.stadiamaps.com/tiles/osm_bright/{z}/{x}/{y}{r}.png', {
     attribution: 
-    '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+    '&copy; <a href="https://www.stadiamaps.com/" target="_blank">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/" target="_blank">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
 }).addTo(map)
 
 let markerLayerGroup = L.layerGroup()
@@ -81,6 +81,7 @@ function constructBody() {
 }
 
 function drawRoutes(root) {
+    console.debug(root)
     clearRoutes()
 
     drawStartLocation(root)
@@ -136,6 +137,8 @@ function drawRoute(route, isPrimaryRoute, color) {
         step.polyline.geoJsonLinestring.coordinates.forEach(coordinate => {
             polyLineLatLngs.push([coordinate[1], coordinate[0]])
         }) 
+
+        if (step.navigationInstruction == undefined) return
 
         stepStarts.push(
             [
