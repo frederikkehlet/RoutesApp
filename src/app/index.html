@@ -13,13 +13,24 @@
 	<script src="./scripts/main.js" defer></script>
 </head>
 <body>
-	<div class="autocomplete-container">	
-		<input type="text" id="from-address" placeholder="Fra">
-		<input type="text" id="to-address" placeholder="Til">
-		<fluent-divider style="margin-top: 10px"></fluent-divider>
-		<fluent-button appearance="accent" onclick="navigate()">Find rute</fluent-button>
-		<fluent-button appearance="neutral" onclick="clearRoutes()">Fjern rute</fluent-button>
-	</div>
+	<div id="sideBar">
+		<div class="autocomplete-container">	
+			<input type="text" id="from-address" placeholder="Fra">
+			<input type="text" id="to-address" placeholder="Til">
+			<fluent-divider style="margin-top: 10px"></fluent-divider>
+			
+			<fluent-button appearance="accent" onclick="navigate()" class="routeButton">Find rute</fluent-button>
+			<fluent-button id="downArrowButton" onclick="swap()"s>&#8595;</fluent-button>
+			
+			<fluent-button appearance="neutral" onclick="clearRoutes()" class="routeButton">Fjern rute</fluent-button>
+			<fluent-button id="upArrowButton" onclick="swap()">&#8593;</fluent-button>	
+		</div>
+		<div id="cardContainer" style="display:none">
+			<h4 style="text-align:center;">Ruteinformation</h4>
+			<fluent-card id="routeInformationCard">
+			</fluent-card>
+		</div>
+	</div>	
 	<div id="map"></div>
 </body>
 </html>
