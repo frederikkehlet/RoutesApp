@@ -3,11 +3,30 @@ let toCoordinates = []
 let fromAddress = ""
 let toAddress = ""
 let layerGroups = {}
+let fromAddressInput = document.getElementById("from-address")
+let toAddressInput = document.getElementById("to-address")
+let cardContainer = document.getElementById("cardContainer")
+let routeInformationCard = document.getElementById("routeInformationCard")
+let root;
+
+document.addEventListener('contextmenu', event => event.preventDefault());
 
 let map = L.map('map', {
-    center: [56.2702914, 10.1681083],
+    center: [56.20693178979385, 11.259443541078806],
     zoom: 8,
+    zoomControl: false,
+    maxBounds: [[
+        57.86220623482456,6.439095139962165
+    ],[
+        54.44486654830236,15.616092030236379
+    ]]
 })
+
+L.control.zoom({
+    position: 'bottomleft'
+}).addTo(map);
+
+map.on('click', (e) => {console.debug(e)})
 
 let baseTileLayer = L.tileLayer('https://tiles.stadiamaps.com/tiles/osm_bright/{z}/{x}/{y}{r}.png', {
     attribution: 
@@ -19,7 +38,7 @@ markerLayerGroup.addTo(map)
 
 let layerControl = L.control.layers({"Kort": baseTileLayer})
 
-dawaAutocomplete.dawaAutocomplete(document.getElementById("from-address"), {
+dawaAutocomplete.dawaAutocomplete(fromAddressInput, {
     select: function(selected) {
         fromCoordinates[0] = selected.data.x
         fromCoordinates[1] = selected.data.y
@@ -27,7 +46,7 @@ dawaAutocomplete.dawaAutocomplete(document.getElementById("from-address"), {
     }
 });
 
-dawaAutocomplete.dawaAutocomplete(document.getElementById("to-address"), {
+dawaAutocomplete.dawaAutocomplete(toAddressInput, {
     select: function(selected) {
         toCoordinates[0] = selected.data.x
         toCoordinates[1] = selected.data.y
@@ -36,6 +55,11 @@ dawaAutocomplete.dawaAutocomplete(document.getElementById("to-address"), {
 });
 
 async function navigate() {
+    if (fromAddressInput.value == "" 
+    || toAddressInput.value == "") {
+        return
+    }
+    
     if (fromCoordinates[0] == undefined || fromCoordinates[1] == undefined||
         toCoordinates[0] == undefined || toCoordinates[1] == undefined) {
             console.debug("Not all coordinates are present. Returning.")
@@ -53,6 +77,25 @@ async function navigate() {
 
     let json = await response.json()
     drawRoutes(json)
+}
+
+function swap() {
+    swapInputValues()
+    swapCoordinateValues()
+    navigate()
+}
+
+function swapInputValues() {
+    let tempValue = fromAddressInput.value;
+    fromAddressInput.value = toAddressInput.value;
+    toAddressInput.value = tempValue;
+
+}
+
+function swapCoordinateValues() {
+    let tempCoordinates = fromCoordinates
+    fromCoordinates = toCoordinates
+    toCoordinates = tempCoordinates
 }
 
 function constructBody() {
@@ -80,7 +123,8 @@ function constructBody() {
     }
 }
 
-function drawRoutes(root) {
+function drawRoutes(json) {
+    root = json
     console.debug(root)
     clearRoutes()
 
@@ -93,26 +137,35 @@ function drawRoutes(root) {
 
     while (i < root.routes.length) {
         let layerGroup = drawRoute(root.routes[i], isPrimaryRoute, colors[i])
-        layerGroups[`<span style="color:${colors[i]};font-weight:bold">${metersToKilometers(root.routes[i].distanceMeters)} km (${secondsToHoursAndMinutes(root.routes[i].duration)})</span>`] = layerGroup
+        layerGroups[`<span style="cursor:pointer;font-size:17px;" onclick="addRouteToCard(${i})">&#128337<b style="color:${colors[i]};">${secondsToHoursAndMinutes(root.routes[i].duration)}</b> <span style="font-size:15px">(${metersToKilometers(root.routes[i].distanceMeters)} km)</span> </span>`] = layerGroup
         isPrimaryRoute = false
         i++
     }
 
     layerControl = L.control.layers(layerGroups, {}, {
         collapsed: false,
-        position: "bottomleft"
+        position: "topleft"
     })
 
     layerControl.addTo(map)
+    addRouteToCard(0)
 }
 
 function drawStartLocation(root) {
     let startLocationMarker = 
         L.marker(
             [root.routes[0].legs[0].startLocation.latLng.latitude,
-            root.routes[0].legs[0].startLocation.latLng.longitude])
+            root.routes[0].legs[0].startLocation.latLng.longitude],
+            {
+                icon: L.icon({
+                    iconUrl: "../images/pin.png",
+                    iconSize: [45,45],
+                    iconAnchor: [22.5,45],
+                    popupAnchor: [0,-50]
+                })
+            })
 
-    startLocationMarker.bindPopup(fromAddress).openPopup();
+    startLocationMarker.bindPopup(fromAddressInput.value).openPopup();
     markerLayerGroup.addLayer(startLocationMarker)
 }
 
@@ -120,9 +173,17 @@ function drawEndLocation(root) {
     let endLocationMarker = 
         L.marker(
             [root.routes[0].legs[0].endLocation.latLng.latitude,
-            root.routes[0].legs[0].endLocation.latLng.longitude])
+            root.routes[0].legs[0].endLocation.latLng.longitude], 
+            {
+                icon: L.icon({
+                    iconUrl: "../images/red-flag.png",
+                    iconSize: [45,45],
+                    iconAnchor: [10.5,45],
+                    popupAnchor: [0,-50]
+                })
+            })
 
-    endLocationMarker.bindPopup(toAddress).openPopup()
+    endLocationMarker.bindPopup(toAddressInput.value).openPopup()
     markerLayerGroup.addLayer(endLocationMarker)
 }
 
@@ -169,11 +230,42 @@ function drawRoute(route, isPrimaryRoute, color) {
         routeLayerGroup.addLayer(circle)
     })
 
+
+
     if (isPrimaryRoute) map.fitBounds(polyline.getBounds())
     return routeLayerGroup
 }
 
+function addRouteToCard(routeIndex) {
+    clearCard()
+    console.debug(`Adding route with index ${routeIndex} to card`)
+    console.debug(root.routes[routeIndex])
+
+    let selectedRoute = root.routes[routeIndex]
+    selectedRoute.legs[0].steps.forEach(step => {
+        if (step.navigationInstruction == undefined) return
+        
+        let instruction = document.createElement("div")
+        instruction.setAttribute("style", "padding:15px 0 15px 0;cursor:pointer")
+        let divider = document.createElement("fluent-divider")
+
+        instruction.addEventListener("click", () => {
+            let latLng = [step.startLocation.latLng.latitude,step.startLocation.latLng.longitude]      
+            L.popup(latLng,{content: `<p>${step.navigationInstruction.instructions}</p>`}).openOn(map)
+            map.setView(latLng, map.getZoom(), {animate:true, duration: 0.5})
+        })
+
+        instruction.innerHTML = `${step.navigationInstruction.instructions} <b>(${metersToKilometers(step.distanceMeters)} km)</b>`
+        routeInformationCard.appendChild(instruction)
+        routeInformationCard.appendChild(divider)
+    })
+    cardContainer.setAttribute("style", "display:block")
+    cardContainer.scrollTop = 0
+}
+
 function clearRoutes() {
+    map.closePopup()
+    clearCard()
     layerControl.remove()
     markerLayerGroup.clearLayers()
 
@@ -184,15 +276,23 @@ function clearRoutes() {
     layerGroups = {}
 }
 
+function clearCard() {
+    map.closePopup()
+    while (routeInformationCard.firstChild) {
+        routeInformationCard.removeChild(routeInformationCard.lastChild)
+    }
+    cardContainer.setAttribute("style", "display:none")
+}
+
 function metersToKilometers(meters) {
-    return (meters / 1000).toFixed(2)
+    return (meters / 1000).toFixed(1)
 }
 
 function secondsToHoursAndMinutes(duration) {
     let d = parseInt(duration.split("s")[0])
     let hours = Math.floor(d / 3600)
     let minutes = Math.floor(d % 3600 / 60)
-    let seconds = Math.floor(d % 3600 % 60)
 
-    return `${hours}h${minutes}m${seconds}s`
+    if (hours == 0) return `${minutes} min`
+    return `${hours} t. ${minutes} min`
 }
